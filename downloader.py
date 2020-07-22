@@ -12,6 +12,8 @@ from multiprocessing import Pool, Process, Value, Lock
 
 from requests.exceptions import ConnectionError, ReadTimeout, TooManyRedirects, MissingSchema, InvalidURL
 
+import urllib.request
+
 parser = argparse.ArgumentParser(description='ImageNet image scraper')
 parser.add_argument('-scrape_only_flickr', default=True, type=lambda x: (str(x).lower() == 'true'))
 parser.add_argument('-number_of_classes', default = 10, type=int)
@@ -41,7 +43,7 @@ IMAGENET_API_WNID_TO_URLS = lambda wnid: f'http://www.image-net.org/api/text/ima
 
 current_folder = os.path.dirname(os.path.realpath(__file__))
 
-class_info_json_filename = 'imagenet_class_info.json'
+class_info_json_filename = 'imagenet_class_index.json'
 class_info_json_filepath = os.path.join(current_folder, class_info_json_filename)
 
 class_info_dict = dict()
@@ -49,12 +51,22 @@ class_info_dict = dict()
 with open(class_info_json_filepath) as class_info_json_f:
     class_info_dict = json.load(class_info_json_f)
 
+CLASS_INDEX_PATH = ('https://storage.googleapis.com/download.tensorflow.org/'
+                    'data/imagenet_class_index.json')
+
+with urllib.request.urlopen(CLASS_INDEX_PATH) as url:
+    data = json.loads(url.read())
+
+nids_list = []
+for id, (nid, name) in data.items():
+    nids_list.append(nid)
+
 classes_to_scrape = []
 
 if args.use_class_list == True:
-   for item in args.class_list:
+   for item in nids_list:
        classes_to_scrape.append(item)
-       if item not in class_info_dict:
+       if item not in nids_list:
            logging.error(f'Class {item} not found in ImageNete')
            exit()
 
@@ -81,7 +93,7 @@ elif args.use_class_list == False:
 
 
 print("Picked the following clases:")
-print([ class_info_dict[class_wnid]['class_name'] for class_wnid in classes_to_scrape ])
+print([ class_wnid for class_wnid in classes_to_scrape ])
 
 imagenet_images_folder = os.path.join(args.data_root, 'imagenet_images')
 if not os.path.isdir(imagenet_images_folder):
@@ -316,7 +328,7 @@ def get_image(img_url):
 
 for class_wnid in classes_to_scrape:
 
-    class_name = class_info_dict[class_wnid]["class_name"]
+    class_name = class_wnid
     print(f'Scraping images for class \"{class_name}\"')
     url_urls = IMAGENET_API_WNID_TO_URLS(class_wnid)
 
